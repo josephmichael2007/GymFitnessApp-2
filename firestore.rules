@@ -1,0 +1,42 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function role() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+    }
+    function isAdmin() { return request.auth != null && role() == 'Admin'; }
+    function isTrainerOf(uid) {
+      return request.auth != null && role() == 'Trainer' &&
+             get(/databases/$(database)/documents/users/$(uid)).data.trainerUid == request.auth.uid;
+    }
+
+    match /users/{uid} {
+      allow read: if request.auth != null && (request.auth.uid == uid || isAdmin() || isTrainerOf(uid));
+      allow create: if request.auth != null && request.auth.uid == uid;
+      // A trainee's own doc: only an admin, or their own trainer, may edit fields like dailyGoal.
+      allow update: if request.auth != null && (isAdmin()
+                    || (isTrainerOf(uid) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['dailyGoal'])));
+
+      match /workouts/{wid} {
+        allow read: if request.auth != null && (request.auth.uid == uid || isAdmin() || isTrainerOf(uid));
+        allow write: if request.auth != null && request.auth.uid == uid;
+      }
+      match /assignedExercises/{aid} {
+        allow read: if request.auth != null && (request.auth.uid == uid || isAdmin() || isTrainerOf(uid));
+        allow write: if isAdmin() || isTrainerOf(uid);
+      }
+    }
+
+    // Trainer invite codes, one per gym. Only an admin manages these.
+    match /trainerCodes/{code} {
+      allow read: if request.auth != null;
+      allow write: if isAdmin();
+    }
+
+    // Shared exercise library any trainer can add to.
+    match /exercises/{eid} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && (role() == 'Trainer' || isAdmin());
+    }
+  }
+}
