@@ -3,18 +3,19 @@ package com.fitness.controller;
 import com.fitness.model.UserProfile;
 import com.fitness.service.FirebaseService;
 import com.fitness.util.Async;
-import com.fitness.view.LoginPanel;
-import com.fitness.view.Theme;
+import com.fitness.mvc.LoginActions;
+import com.fitness.mvc.LoginRequest;
+import com.fitness.mvc.LoginScreen;
 
 import javax.swing.JOptionPane;
 import java.util.List;
 
 /** Handles login and registration, including checking the account's role matches the chosen portal. */
-public class AuthController implements LoginPanel.Actions {
+public class AuthController implements LoginActions {
 
-    private LoginPanel view;
+    private LoginScreen view;
 
-    public void attach(LoginPanel view) {
+    public void attach(LoginScreen view) {
         this.view = view;
         view.setActions(this);
     }
@@ -49,7 +50,7 @@ public class AuthController implements LoginPanel.Actions {
     }
 
     @Override
-    public void submit(LoginPanel.LoginRequest request) {
+    public void submit(LoginRequest request) {
         if (request.email().isBlank() || request.password().isEmpty()
                 || (request.registerMode() && request.name().isBlank())) {
             view.showMessage("Please fill in all fields.", "Missing info", JOptionPane.WARNING_MESSAGE);

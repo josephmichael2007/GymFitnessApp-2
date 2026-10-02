@@ -2,8 +2,12 @@ package com.fitness.view;
 
 import com.fitness.model.AssignedExercise;
 import com.fitness.model.Stats;
+import com.fitness.model.TraineeDashboardData;
 import com.fitness.model.UserProfile;
 import com.fitness.model.Workout;
+import com.fitness.mvc.TraineeActions;
+import com.fitness.mvc.TraineeScreen;
+import com.fitness.mvc.WorkoutForm;
 import com.fitness.util.AppConfig;
 
 import javax.swing.*;
@@ -13,18 +17,8 @@ import java.awt.*;
 import java.util.List;
 
 /** What a trainee sees: exercises their trainer assigned, a workout log form, progress ring, charts, history. */
-public class TraineeDashboard extends JPanel {
-    public interface Actions {
-        void refresh();
-        void addWorkout(WorkoutForm form);
-        void deleteWorkout(int row);
-        void logAssignedExercise(int row);
-    }
-
-    public record WorkoutForm(String exercise, String category, String details, String intensity,
-                              String calories, boolean completed) { }
-
-    private Actions actions;
+public class TraineeDashboard extends JPanel implements TraineeScreen {
+    private TraineeActions actions;
 
     private final JTextField txtExercise = new JTextField();
     private final JTextField txtDetails = new JTextField("3 sets x 12 reps");
@@ -119,7 +113,7 @@ public class TraineeDashboard extends JPanel {
         });
     }
 
-    public void setActions(Actions actions) { this.actions = actions; }
+    @Override public void setActions(TraineeActions actions) { this.actions = actions; }
 
     private JPanel buildAssignedCard() {
         JPanel card = Theme.card("Assigned by your trainer", new BorderLayout(0, 8));
@@ -155,7 +149,7 @@ public class TraineeDashboard extends JPanel {
         return card;
     }
 
-    public void render(com.fitness.controller.TraineeController.TraineeView view) {
+    @Override public void render(TraineeDashboardData view) {
         List<Workout> workouts = view.workouts();
         List<AssignedExercise> assigned = view.assigned();
         goal = view.profile().dailyGoal() != null ? view.profile().dailyGoal() : AppConfig.defaultDailyGoal();
@@ -174,21 +168,21 @@ public class TraineeDashboard extends JPanel {
         donut.setData(Stats.byCategory(workouts));
     }
 
-    public void prefillAssignedExercise(AssignedExercise a) {
+    @Override public void prefillAssignedExercise(AssignedExercise a) {
         txtExercise.setText(a.exerciseName());
         cbCategory.setSelectedItem(a.category());
         txtDetails.setText(a.setsReps());
     }
 
-    public boolean confirmDelete(Workout workout) {
+    @Override public boolean confirmDelete(Workout workout) {
         return JOptionPane.showConfirmDialog(this, "Delete this workout?", "Confirm",
                 JOptionPane.YES_NO_OPTION) == JOptionPane.YES_OPTION;
     }
 
-    public void setAddEnabled(boolean enabled) { btnAdd.setEnabled(enabled); }
-    public void clearExercise() { txtExercise.setText(""); }
-    public void showError(Throwable error) { Theme.error(this, error); }
-    public void showMessage(String message, String title, int messageType) {
+    @Override public void setAddEnabled(boolean enabled) { btnAdd.setEnabled(enabled); }
+    @Override public void clearExercise() { txtExercise.setText(""); }
+    @Override public void showError(Throwable error) { Theme.error(this, error); }
+    @Override public void showMessage(String message, String title, int messageType) {
         JOptionPane.showMessageDialog(this, message, title, messageType);
     }
 }

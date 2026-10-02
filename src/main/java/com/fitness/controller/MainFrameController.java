@@ -22,9 +22,13 @@ public final class MainFrameController {
 
     private void onLogin(UserProfile user) {
         if (user.isTrainer()) {
-            view.showDashboard(new TrainerDashboard(user, this::logout));
+            TrainerDashboard dashboard = new TrainerDashboard(user, this::logout);
+            new TrainerController().attach(dashboard, user);
+            view.showDashboard(dashboard);
         } else if (user.isAdmin()) {
-            view.showDashboard(new AdminDashboard(user, this::logout));
+            AdminDashboard dashboard = new AdminDashboard(user, this::logout);
+            new AdminController().attach(dashboard);
+            view.showDashboard(dashboard);
         } else {
             TraineeDashboard dashboard = new TraineeDashboard(user, this::logout);
             new TraineeController().attach(dashboard, user.uid());

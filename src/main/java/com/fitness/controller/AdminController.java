@@ -1,41 +1,39 @@
 package com.fitness.controller;
 
 import com.fitness.model.GymCode;
+import com.fitness.model.AdminAccountStatus;
+import com.fitness.model.AdminTraineeStatus;
 import com.fitness.model.UserProfile;
 import com.fitness.model.Workout;
 import com.fitness.service.FirebaseService;
 import com.fitness.util.Async;
-import com.fitness.view.AdminDashboard;
-import com.fitness.view.Theme;
+import com.fitness.mvc.AdminActions;
+import com.fitness.mvc.AdminScreen;
 
-import java.util.ArrayList;
 import java.util.List;
 import javax.swing.JOptionPane;
 
 /** Account management, plus creating/managing the per-gym trainer invite codes. */
-public class AdminController implements AdminDashboard.Actions {
+public class AdminController implements AdminActions {
 
-    private AdminDashboard view;
+    private AdminScreen view;
     private List<UserProfile> users = List.of();
     private List<GymCode> gymCodes = List.of();
-
-    public record TraineeStatus(UserProfile profile, List<Workout> workouts) { }
-    public record AccountStatus(UserProfile profile, List<Workout> workouts, List<TraineeStatus> trainees) { }
 
     public List<UserProfile> loadAllUsers() throws Exception {
         return FirebaseService.getAllUsers();
     }
 
-    public AccountStatus loadAccountStatus(UserProfile user) throws Exception {
+    public AdminAccountStatus loadAccountStatus(UserProfile user) throws Exception {
         if (user.isTrainer()) {
-            List<TraineeStatus> trainees = new ArrayList<>();
+            List<AdminTraineeStatus> trainees = new java.util.ArrayList<>();
             for (UserProfile trainee : FirebaseService.getTraineesOf(user.uid())) {
-                trainees.add(new TraineeStatus(trainee, FirebaseService.getWorkouts(trainee.uid())));
+                trainees.add(new AdminTraineeStatus(trainee, FirebaseService.getWorkouts(trainee.uid())));
             }
-            return new AccountStatus(user, List.of(), trainees);
+            return new AdminAccountStatus(user, List.of(), trainees);
         }
         List<Workout> workouts = user.isTrainee() ? FirebaseService.getWorkouts(user.uid()) : List.of();
-        return new AccountStatus(user, workouts, List.of());
+        return new AdminAccountStatus(user, workouts, List.of());
     }
 
     public void changeRole(String uid, String newRole, String assignmentId) throws Exception {
@@ -64,7 +62,7 @@ public class AdminController implements AdminDashboard.Actions {
         FirebaseService.deleteGymCode(code);
     }
 
-    public void attach(AdminDashboard view, UserProfile admin) {
+    public void attach(AdminScreen view) {
         this.view = view;
         view.setActions(this);
         refreshUsers();

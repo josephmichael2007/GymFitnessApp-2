@@ -1,9 +1,12 @@
 package com.fitness.controller;
 
 import com.fitness.model.AssignedExercise;
+import com.fitness.model.TraineeDashboardData;
 import com.fitness.model.UserProfile;
 import com.fitness.model.Workout;
-import com.fitness.view.TraineeDashboard;
+import com.fitness.mvc.TraineeActions;
+import com.fitness.mvc.TraineeScreen;
+import com.fitness.mvc.WorkoutForm;
 import com.fitness.util.Async;
 
 import javax.swing.JOptionPane;
@@ -13,32 +16,30 @@ import com.fitness.service.FirebaseService;
 import java.util.List;
 
 /** Everything a trainee's dashboard needs. */
-public class TraineeController implements TraineeDashboard.Actions {
+public class TraineeController implements TraineeActions {
 
-    private TraineeDashboard view;
+    private TraineeScreen view;
     private String uid;
-    private TraineeView currentView;
+    private TraineeDashboardData currentView;
 
-    public record TraineeView(UserProfile profile, List<Workout> workouts, List<AssignedExercise> assigned) { }
-
-    public TraineeView load(String uid) throws Exception {
+    public TraineeDashboardData load(String uid) throws Exception {
         UserProfile profile = FirebaseService.getProfile(uid);
         List<Workout> workouts = FirebaseService.getWorkouts(uid);
         List<AssignedExercise> assigned = FirebaseService.getAssignedExercises(uid);
-        return new TraineeView(profile, workouts, assigned);
+        return new TraineeDashboardData(profile, workouts, assigned);
     }
 
-    public TraineeView addWorkout(String uid, Workout w) throws Exception {
+    public TraineeDashboardData addWorkout(String uid, Workout w) throws Exception {
         FirebaseService.addWorkout(uid, w);
         return load(uid);
     }
 
-    public TraineeView deleteWorkout(String uid, String workoutId) throws Exception {
+    public TraineeDashboardData deleteWorkout(String uid, String workoutId) throws Exception {
         FirebaseService.deleteWorkout(uid, workoutId);
         return load(uid);
     }
 
-    public void attach(TraineeDashboard view, String uid) {
+    public void attach(TraineeScreen view, String uid) {
         this.view = view;
         this.uid = uid;
         view.setActions(this);
@@ -54,7 +55,7 @@ public class TraineeController implements TraineeDashboard.Actions {
     }
 
     @Override
-    public void addWorkout(TraineeDashboard.WorkoutForm form) {
+    public void addWorkout(WorkoutForm form) {
         if (form.exercise().isBlank()) {
             view.showMessage("Please enter an exercise name.", "Input error", JOptionPane.ERROR_MESSAGE);
             return;

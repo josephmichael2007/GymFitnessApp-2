@@ -1,11 +1,14 @@
 package com.fitness.view;
 
-import com.fitness.controller.AdminController;
+import com.fitness.model.AdminAccountStatus;
+import com.fitness.model.AdminTraineeStatus;
 import com.fitness.model.GymCode;
 import com.fitness.model.Stats;
 import com.fitness.model.UserProfile;
 import com.fitness.model.Workout;
 import com.fitness.util.AppConfig;
+import com.fitness.mvc.AdminActions;
+import com.fitness.mvc.AdminScreen;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
@@ -16,19 +19,8 @@ import java.util.List;
 import java.util.Map;
 
 /** Admin view: every account across every gym, role changes, account removal, and gym invite codes. */
-public class AdminDashboard extends JPanel {
-    public interface Actions {
-        void refreshUsers();
-        void changeSelectedRole();
-        void showSelectedAccountStatus();
-        void deleteSelectedUser();
-        void refreshGymCodes();
-        void createGymCodeRequested(String gymName, String customCode);
-        void toggleSelectedGymCode();
-        void deleteSelectedGymCode();
-    }
-
-    private Actions actions;
+public class AdminDashboard extends JPanel implements AdminScreen {
+    private AdminActions actions;
 
     // ---- Tab 1: accounts ----
     private final DefaultTableModel model = new DefaultTableModel(
@@ -48,7 +40,6 @@ public class AdminDashboard extends JPanel {
         @Override public boolean isCellEditable(int r, int c) { return false; }
     };
     private final JTable codeTable = new JTable(codeModel);
-    private List<GymCode> codes = List.of();
 
     public AdminDashboard(UserProfile admin, Runnable onLogout) {
         setLayout(new BorderLayout());
@@ -62,7 +53,7 @@ public class AdminDashboard extends JPanel {
 
     }
 
-    public void setActions(Actions actions) { this.actions = actions; }
+    @Override public void setActions(AdminActions actions) { this.actions = actions; }
 
     // ================================================================= tab 1
 
@@ -103,11 +94,11 @@ public class AdminDashboard extends JPanel {
         return body;
     }
 
-    public int selectedUserRow() { return table.getSelectedRow(); }
-    public String selectedRole() { return (String) cbNewRole.getSelectedItem(); }
-    public int selectedGymCodeRow() { return codeTable.getSelectedRow(); }
+    @Override public int selectedUserRow() { return table.getSelectedRow(); }
+    @Override public String selectedRole() { return (String) cbNewRole.getSelectedItem(); }
+    @Override public int selectedGymCodeRow() { return codeTable.getSelectedRow(); }
 
-    public void renderUsers(List<UserProfile> list, String summary) {
+    @Override public void renderUsers(List<UserProfile> list, String summary) {
         users = list;
             Map<String, String> nameByUid = new HashMap<>();
             for (UserProfile u : list) nameByUid.put(u.uid(), u.name());
@@ -122,7 +113,7 @@ public class AdminDashboard extends JPanel {
             }
     }
 
-    public String chooseRoleAssignment(UserProfile user, String newRole, List<UserProfile> users, List<GymCode> codes) {
+    @Override public String chooseRoleAssignment(UserProfile user, String newRole, List<UserProfile> users, List<GymCode> codes) {
         if ("Trainer".equals(newRole)) {
             JComboBox<GymCode> choice = new JComboBox<>(codes.toArray(GymCode[]::new));
             choice.setRenderer(new DefaultListCellRenderer() {
@@ -169,18 +160,18 @@ public class AdminDashboard extends JPanel {
         }
             }
 
-            public boolean confirmRoleChange(UserProfile user, String newRole) {
+            @Override public boolean confirmRoleChange(UserProfile user, String newRole) {
             return JOptionPane.showConfirmDialog(this, "Change " + user.name() + "'s role to " + newRole + "?", "Confirm",
                         JOptionPane.YES_NO_OPTION) == JOptionPane.YES_OPTION;
             }
 
-            public boolean confirmDeleteUser(UserProfile user) {
+            @Override public boolean confirmDeleteUser(UserProfile user) {
             return JOptionPane.showConfirmDialog(this,
                 "Permanently delete " + user.name() + " (" + user.email() + ")? This removes their login and all data.",
                 "Confirm delete", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE) == JOptionPane.YES_OPTION;
     }
 
-            public void showAccountStatus(AdminController.AccountStatus status) {
+            @Override public void showAccountStatus(AdminAccountStatus status) {
         UserProfile user = status.profile();
         StringBuilder text = new StringBuilder();
         text.append(user.name()).append(" (").append(user.email()).append(")\n")
@@ -211,7 +202,7 @@ public class AdminDashboard extends JPanel {
                     .append(active).append(" active today\n\n")
                     .append("Trainee status:\n");
             if (status.trainees().isEmpty()) text.append("No trainees assigned.");
-            for (AdminController.TraineeStatus trainee : status.trainees()) {
+            for (AdminTraineeStatus trainee : status.trainees()) {
                 int goal = trainee.profile().dailyGoal() == null
                         ? AppConfig.defaultDailyGoal() : trainee.profile().dailyGoal();
                 int today = Stats.today(trainee.workouts());
@@ -287,22 +278,21 @@ public class AdminDashboard extends JPanel {
         return body;
     }
 
-    public void renderGymCodes(List<GymCode> list) {
-        codes = list;
+    @Override public void renderGymCodes(List<GymCode> list) {
         codeModel.setRowCount(0);
         for (GymCode code : list) {
             codeModel.addRow(new Object[]{code.gymName(), code.code(), code.active() ? "Active" : "Deactivated"});
         }
     }
 
-    public void clearGymCodeForm() { txtGymName.setText(""); txtCustomCode.setText(""); }
-    public boolean confirmDeleteGymCode(GymCode code) {
+    @Override public void clearGymCodeForm() { txtGymName.setText(""); txtCustomCode.setText(""); }
+    @Override public boolean confirmDeleteGymCode(GymCode code) {
         return JOptionPane.showConfirmDialog(this, "Delete the gym code for " + code.gymName() + "? Existing trainers keep "
                 + "their access; this just stops new trainers from using this code.", "Confirm",
                 JOptionPane.YES_NO_OPTION) == JOptionPane.YES_OPTION;
     }
-    public void showError(Throwable error) { Theme.error(this, error); }
-    public void showMessage(String message, String title, int type) {
+    @Override public void showError(Throwable error) { Theme.error(this, error); }
+    @Override public void showMessage(String message, String title, int type) {
         JOptionPane.showMessageDialog(this, message, title, type);
     }
 }

@@ -1,6 +1,9 @@
 package com.fitness.view;
 
 import com.fitness.model.UserProfile;
+import com.fitness.mvc.LoginActions;
+import com.fitness.mvc.LoginRequest;
+import com.fitness.mvc.LoginScreen;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
@@ -15,17 +18,8 @@ import java.util.function.Consumer;
  *  - Trainer registration: enter the gym code an admin gave them.
  *  - Admin registration: enter the admin bootstrap code from config.properties.
  */
-public class LoginPanel extends JPanel {
-    public interface Actions {
-        void loadTrainersForView();
-        void submit(LoginRequest request);
-        void sendPasswordReset(String email);
-    }
-
-    public record LoginRequest(String name, String email, String password, String portal, String code,
-                               boolean registerMode, UserProfile trainer) { }
-
-    private Actions actions;
+public class LoginPanel extends JPanel implements LoginScreen {
+    private LoginActions actions;
     private final Consumer<UserProfile> onSuccess;
 
     private final JTextField txtName = new JTextField();
@@ -131,7 +125,7 @@ public class LoginPanel extends JPanel {
         updateVisibility();
     }
 
-    public void setActions(Actions actions) { this.actions = actions; }
+    @Override public void setActions(LoginActions actions) { this.actions = actions; }
 
     private void showPortalMenu() {
         JPopupMenu menu = new JPopupMenu();
@@ -205,23 +199,23 @@ public class LoginPanel extends JPanel {
         updateVisibility();
     }
 
-    public void showTrainers(List<UserProfile> trainers) {
+    @Override public void showTrainers(List<UserProfile> trainers) {
         trainersLoading = false;
         cbTrainer.removeAllItems();
         if (trainers.isEmpty()) cbTrainer.addItem(NONE_YET);
         else for (UserProfile trainer : trainers) cbTrainer.addItem(trainer);
     }
 
-    public void showError(Throwable error) {
+    @Override public void showError(Throwable error) {
         trainersLoading = false;
         Theme.error(this, error);
     }
 
-    public void setSubmitEnabled(boolean enabled) { btnSubmit.setEnabled(enabled); }
-    public void setResetEnabled(boolean enabled) { btnForgot.setEnabled(enabled); }
-    public void focusEmail() { txtEmail.requestFocusInWindow(); }
-    public void loginSucceeded(UserProfile user) { onSuccess.accept(user); }
-    public void showMessage(String message, String title, int messageType) {
+    @Override public void setSubmitEnabled(boolean enabled) { btnSubmit.setEnabled(enabled); }
+    @Override public void setResetEnabled(boolean enabled) { btnForgot.setEnabled(enabled); }
+    @Override public void focusEmail() { txtEmail.requestFocusInWindow(); }
+    @Override public void loginSucceeded(UserProfile user) { onSuccess.accept(user); }
+    @Override public void showMessage(String message, String title, int messageType) {
         JOptionPane.showMessageDialog(this, message, title, messageType);
     }
 

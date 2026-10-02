@@ -1,25 +1,25 @@
 package com.fitness.view;
 
-import com.fitness.controller.TrainerController;
 import com.fitness.model.AssignedExercise;
 import com.fitness.model.Exercise;
 import com.fitness.model.Stats;
+import com.fitness.model.TrainerTraineeSummary;
 import com.fitness.model.UserProfile;
 import com.fitness.model.Workout;
 import com.fitness.util.AppConfig;
-import com.fitness.util.Async;
+import com.fitness.mvc.ExerciseForm;
+import com.fitness.mvc.TrainerActions;
+import com.fitness.mvc.TrainerScreen;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
-import java.time.LocalDate;
 import java.util.List;
 
 /** Trainer view: trainee progress overview, plus an exercise library, assignment and goal-setting tab. */
-public class TrainerDashboard extends JPanel {
-    private final TrainerController controller = new TrainerController();
-    private final UserProfile trainer;
+public class TrainerDashboard extends JPanel implements TrainerScreen {
+    private TrainerActions actions;
 
     // ---- Tab 1: overview ----
     private final DefaultTableModel overviewModel = new DefaultTableModel(
@@ -38,7 +38,6 @@ public class TrainerDashboard extends JPanel {
     private final JLabel lblSelected = new JLabel("Select a trainee");
     private final JLabel lblSummary = new JLabel(" ");
     private final JButton btnRefresh = Theme.button("Refresh", Theme.PRIMARY);
-    private List<TrainerController.TraineeSummary> data = List.of();
 
     // ---- Tab 2: exercises & goals ----
     private final JTextField txtExName = new JTextField();
@@ -61,11 +60,8 @@ public class TrainerDashboard extends JPanel {
     };
     private final JTable traineeAssignedTable = new JTable(traineeAssignedModel);
 
-    private List<Exercise> library = List.of();
-    private List<AssignedExercise> traineeAssigned = List.of();
 
     public TrainerDashboard(UserProfile trainer, Runnable onLogout) {
-        this.trainer = trainer;
         setLayout(new BorderLayout());
         setBackground(Theme.BG);
         String subtitle = "Signed in as " + trainer.name()
@@ -77,9 +73,9 @@ public class TrainerDashboard extends JPanel {
         tabs.addTab("Exercises & Goals", buildExercisesTab());
         add(tabs, BorderLayout.CENTER);
 
-        loadOverview();
-        loadExerciseLibrary();
     }
+
+    @Override public void setActions(TrainerActions actions) { this.actions = actions; }
 
     // ================================================================= tab 1
 
@@ -129,27 +125,17 @@ public class TrainerDashboard extends JPanel {
         body.add(right, BorderLayout.CENTER);
 
         overview.getSelectionModel().addListSelectionListener(e -> {
-            if (!e.getValueIsAdjusting()) showDetail(overview.getSelectedRow());
+            if (!e.getValueIsAdjusting() && actions != null) actions.showSelectedTrainee(overview.getSelectedRow());
         });
-        btnRefresh.addActionListener(e -> loadOverview());
+        btnRefresh.addActionListener(e -> { if (actions != null) actions.refreshOverview(); });
         return body;
     }
 
-    private void loadOverview() {
-        btnRefresh.setEnabled(false);
-        Async.run(() -> controller.loadTraineeOverview(trainer.uid()), list -> {
-            btnRefresh.setEnabled(true);
-            data = list;
-            fillOverview();
-            populateAssignDropdown();
-        }, err -> { btnRefresh.setEnabled(true); Theme.error(this, err); });
-    }
-
-    private void fillOverview() {
+    @Override public void renderOverview(List<TrainerTraineeSummary> data) {
         int goal = AppConfig.defaultDailyGoal();
         int active = 0;
         overviewModel.setRowCount(0);
-        for (TrainerController.TraineeSummary t : data) {
+        for (var t : data) {
             int g = t.profile().dailyGoal() != null ? t.profile().dailyGoal() : goal;
             int today = Stats.today(t.workouts());
             if (today > 0) active++;
@@ -157,21 +143,21 @@ public class TrainerDashboard extends JPanel {
                     Stats.total(t.workouts()), today, (today * 100 / Math.max(g, 1)) + "%"});
         }
         lblSummary.setText(data.size() + " trainees  |  " + active + " active today");
+        populateAssignDropdown(data);
         if (!data.isEmpty()) overview.setRowSelectionInterval(0, 0);
-        else showDetail(-1);
+        else renderSelectedTrainee(null);
     }
 
-    private void showDetail(int row) {
+    @Override public void renderSelectedTrainee(TrainerTraineeSummary t) {
         detailModel.setRowCount(0);
         int goal = AppConfig.defaultDailyGoal();
-        if (row < 0 || row >= data.size()) {
+        if (t == null) {
             lblSelected.setText("Select a trainee");
             ring.setProgress(0, goal);
             bars.setData(new java.util.LinkedHashMap<>(), goal);
             donut.setData(new java.util.LinkedHashMap<>());
             return;
         }
-        TrainerController.TraineeSummary t = data.get(row);
         int g = t.profile().dailyGoal() != null ? t.profile().dailyGoal() : goal;
         lblSelected.setText(t.profile().name() + "  -  " + t.profile().email() + "   (goal: " + g + " kcal/day)");
         ring.setProgress(Stats.today(t.workouts()), g);
@@ -224,8 +210,14 @@ public class TrainerDashboard extends JPanel {
         card.add(new JScrollPane(libraryTable), BorderLayout.CENTER);
         card.add(bottom, BorderLayout.SOUTH);
 
-        btnCreate.addActionListener(e -> createExercise());
-        btnDelete.addActionListener(e -> deleteExercise());
+        btnCreate.addActionListener(e -> {
+            if (actions != null) actions.createExercise(new ExerciseForm(txtExName.getText(),
+                    (String) cbExCategory.getSelectedItem(), (Integer) spSets.getValue(), (Integer) spReps.getValue(),
+                    txtExNotes.getText()));
+        });
+        btnDelete.addActionListener(e -> {
+            if (actions != null) actions.deleteSelectedExercise(libraryTable.getSelectedRow());
+        });
         return card;
     }
 
@@ -276,52 +268,40 @@ public class TrainerDashboard extends JPanel {
         card.add(top, BorderLayout.NORTH);
         card.add(assignedCard, BorderLayout.CENTER);
 
-        cbAssignTrainee.addActionListener(e -> loadTraineeAssigned());
-        btnAssign.addActionListener(e -> assignExercise());
-        btnSetGoal.addActionListener(e -> saveGoal());
-        btnUnassign.addActionListener(e -> removeAssignment());
+        cbAssignTrainee.addActionListener(e -> {
+            if (actions != null) actions.traineeSelectionChanged((UserProfile) cbAssignTrainee.getSelectedItem());
+        });
+        btnAssign.addActionListener(e -> {
+            if (actions != null) actions.assignSelectedExercise(libraryTable.getSelectedRow());
+        });
+        btnSetGoal.addActionListener(e -> {
+            if (actions != null) actions.saveDailyGoal((Integer) spGoal.getValue());
+        });
+        btnUnassign.addActionListener(e -> {
+            if (actions != null) actions.removeSelectedAssignment(traineeAssignedTable.getSelectedRow());
+        });
         return card;
     }
 
-    private void loadExerciseLibrary() {
-        Async.run(controller::loadExerciseLibrary, list -> {
-            library = list;
-            libraryModel.setRowCount(0);
-            for (Exercise e : list) {
-                libraryModel.addRow(new Object[]{e.name(), e.category(), e.setsReps(), e.notes()});
-            }
-            if (!list.isEmpty()) libraryTable.setRowSelectionInterval(0, 0);
-        }, err -> Theme.error(this, err));
-    }
-
-    private void createExercise() {
-        String name = txtExName.getText().trim();
-        if (name.isEmpty()) {
-            JOptionPane.showMessageDialog(this, "Enter an exercise name.");
-            return;
+    @Override public void renderExerciseLibrary(List<Exercise> library) {
+        libraryModel.setRowCount(0);
+        for (Exercise exercise : library) {
+            libraryModel.addRow(new Object[]{exercise.name(), exercise.category(), exercise.setsReps(), exercise.notes()});
         }
-        Exercise e = new Exercise(null, name, (String) cbExCategory.getSelectedItem(),
-                (Integer) spSets.getValue(), (Integer) spReps.getValue(), txtExNotes.getText().trim());
-        Async.run(() -> controller.createExercise(e), ex -> { txtExName.setText(""); txtExNotes.setText(""); loadExerciseLibrary(); },
-                err -> Theme.error(this, err));
+        if (!library.isEmpty()) libraryTable.setRowSelectionInterval(0, 0);
     }
 
-    private void deleteExercise() {
-        int row = libraryTable.getSelectedRow();
-        if (row < 0) {
-            JOptionPane.showMessageDialog(this, "Select an exercise first.");
-            return;
+    @Override public void renderAssignedExercises(List<AssignedExercise> assigned) {
+        traineeAssignedModel.setRowCount(0);
+        for (AssignedExercise exercise : assigned) {
+            traineeAssignedModel.addRow(new Object[]{exercise.exerciseName(), exercise.category(), exercise.setsReps()});
         }
-        String id = library.get(row).id();
-        Async.run(() -> { controller.deleteExercise(id); return null; }, v -> loadExerciseLibrary(),
-                err -> Theme.error(this, err));
     }
 
-    /** Only ever this trainer's own trainees - the data-isolation boundary lives in the query, not here. */
-    private void populateAssignDropdown() {
-        UserProfile previouslySelected = selectedTrainee();
+    private void populateAssignDropdown(List<TrainerTraineeSummary> data) {
+        UserProfile previouslySelected = (UserProfile) cbAssignTrainee.getSelectedItem();
         cbAssignTrainee.removeAllItems();
-        for (TrainerController.TraineeSummary t : data) cbAssignTrainee.addItem(t.profile());
+        for (var trainee : data) cbAssignTrainee.addItem(trainee.profile());
         if (data.isEmpty()) return;
         if (previouslySelected != null) {
             for (int i = 0; i < cbAssignTrainee.getItemCount(); i++) {
@@ -331,65 +311,15 @@ public class TrainerDashboard extends JPanel {
                 }
             }
         }
-        cbAssignTrainee.setSelectedIndex(0); // fires the combo's listener, which loads this trainee's assignments
+        cbAssignTrainee.setSelectedIndex(0);
     }
 
-    private UserProfile selectedTrainee() {
-        return (UserProfile) cbAssignTrainee.getSelectedItem();
+    @Override public void setDailyGoalValue(Integer goal) {
+        spGoal.setValue(goal != null ? goal : AppConfig.defaultDailyGoal());
     }
 
-    private void loadTraineeAssigned() {
-        UserProfile t = selectedTrainee();
-        traineeAssignedModel.setRowCount(0);
-        if (t == null) return;
-        spGoal.setValue(t.dailyGoal() != null ? t.dailyGoal() : AppConfig.defaultDailyGoal());
-        Async.run(() -> controller.getAssignedExercises(t.uid()), list -> {
-            traineeAssigned = list;
-            for (AssignedExercise a : list) {
-                traineeAssignedModel.addRow(new Object[]{a.exerciseName(), a.category(), a.setsReps()});
-            }
-        }, err -> Theme.error(this, err));
-    }
+    @Override public void clearExerciseForm() { txtExName.setText(""); txtExNotes.setText(""); }
+    @Override public void showMessage(String message) { JOptionPane.showMessageDialog(this, message); }
+    @Override public void showError(Throwable error) { Theme.error(this, error); }
 
-    private void assignExercise() {
-        UserProfile t = selectedTrainee();
-        int row = libraryTable.getSelectedRow();
-        if (t == null) {
-            JOptionPane.showMessageDialog(this, "No trainees to assign to yet.");
-            return;
-        }
-        if (row < 0) {
-            JOptionPane.showMessageDialog(this, "Select an exercise from the library first.");
-            return;
-        }
-        Exercise ex = library.get(row);
-        AssignedExercise a = new AssignedExercise(null, ex.name(), ex.category(), ex.sets(), ex.reps(),
-                ex.notes(), trainer.name(), LocalDate.now().toString());
-        Async.run(() -> { controller.assignExercise(t.uid(), a); return null; }, v -> {
-            loadTraineeAssigned();
-            JOptionPane.showMessageDialog(this, ex.name() + " assigned to " + t.name() + ".");
-        }, err -> Theme.error(this, err));
-    }
-
-    private void removeAssignment() {
-        UserProfile t = selectedTrainee();
-        int row = traineeAssignedTable.getSelectedRow();
-        if (t == null || row < 0) {
-            JOptionPane.showMessageDialog(this, "Select an assignment to remove.");
-            return;
-        }
-        String id = traineeAssigned.get(row).id();
-        Async.run(() -> { controller.removeAssignedExercise(t.uid(), id); return null; }, v -> loadTraineeAssigned(),
-                err -> Theme.error(this, err));
-    }
-
-    private void saveGoal() {
-        UserProfile t = selectedTrainee();
-        if (t == null) return;
-        int goal = (Integer) spGoal.getValue();
-        Async.run(() -> { controller.setDailyGoal(t.uid(), goal); return null; }, v -> {
-            JOptionPane.showMessageDialog(this, "Daily goal for " + t.name() + " set to " + goal + " kcal.");
-            loadOverview();
-        }, err -> Theme.error(this, err));
-    }
 }
