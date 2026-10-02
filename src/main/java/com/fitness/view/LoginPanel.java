@@ -211,12 +211,15 @@ public class LoginPanel extends JPanel implements LoginScreen {
         trainersLoading = false;
         trainersLoaded = true;
         trainerOptions = List.copyOf(trainers);
-        cbGym.removeAllItems();
         cbTrainer.removeAllItems();
-        trainers.stream().map(UserProfile::gymName).filter(name -> name != null && !name.isBlank())
-            .distinct().sorted(String.CASE_INSENSITIVE_ORDER).forEach(cbGym::addItem);
-        if (cbGym.getItemCount() == 0) cbTrainer.addItem(NONE_YET);
-        else refreshTrainerChoices();
+        if (trainerOptions.isEmpty()) cbTrainer.addItem(NONE_YET);
+    }
+
+    @Override public void showGyms(List<String> gyms) {
+        cbGym.removeAllItems();
+        gyms.forEach(cbGym::addItem);
+        cbGym.setMaximumRowCount(Math.max(8, cbGym.getItemCount()));
+        refreshTrainerChoices();
     }
 
     @Override public void showError(Throwable error) {
@@ -250,6 +253,7 @@ public class LoginPanel extends JPanel implements LoginScreen {
         trainerOptions.stream().filter(trainer -> gym.equals(trainer.gymName()))
                 .sorted(java.util.Comparator.comparing(UserProfile::name, String.CASE_INSENSITIVE_ORDER))
                 .forEach(cbTrainer::addItem);
+        cbTrainer.setMaximumRowCount(Math.max(8, cbTrainer.getItemCount()));
         if (cbTrainer.getItemCount() == 0) cbTrainer.addItem(NONE_YET);
     }
 }

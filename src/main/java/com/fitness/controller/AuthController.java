@@ -46,8 +46,16 @@ public class AuthController implements LoginActions {
 
     @Override
     public void loadTrainersForView() {
-        Async.run(this::loadTrainers, view::showTrainers, view::showError);
+        Async.run(() -> {
+            List<UserProfile> trainers = loadTrainers();
+            return new TrainerOptions(trainers, FirebaseService.getGymNamesForSelection(trainers));
+        }, options -> {
+            view.showTrainers(options.trainers());
+            view.showGyms(options.gyms());
+        }, view::showError);
     }
+
+    private record TrainerOptions(List<UserProfile> trainers, List<String> gyms) { }
 
     @Override
     public void submit(LoginRequest request) {

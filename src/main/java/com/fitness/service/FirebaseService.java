@@ -35,6 +35,7 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.TreeSet;
 
 /**
  * All Firebase access lives here (the data-access part of the Model layer).
@@ -375,6 +376,17 @@ public final class FirebaseService {
     /** All trainers, for a trainee's "pick your trainer" dropdown at signup. */
     public static List<UserProfile> getTrainersForSelection() throws Exception {
         return getUsersByRole("Trainer");
+    }
+
+    public static List<String> getGymNamesForSelection(List<UserProfile> trainers) throws Exception {
+        TreeSet<String> names = new TreeSet<>();
+        for (GymCode gym : getGymCodes()) {
+            if (gym.gymName() != null && !gym.gymName().isBlank()) names.add(gym.gymName());
+        }
+        for (UserProfile trainer : trainers) {
+            if (trainer.gymName() != null && !trainer.gymName().isBlank()) names.add(trainer.gymName());
+        }
+        return List.copyOf(names);
     }
 
     public static void updateTraineeAssignment(String traineeUid, String gymName, String trainerUid) throws Exception {

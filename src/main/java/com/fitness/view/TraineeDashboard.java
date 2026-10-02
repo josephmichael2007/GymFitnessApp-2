@@ -213,6 +213,7 @@ public class TraineeDashboard extends JPanel implements TraineeScreen {
 
         JComboBox<String> gymChoice = new JComboBox<>(gyms.toArray(String[]::new));
         JComboBox<UserProfile> trainerChoice = new JComboBox<>();
+        gymChoice.setMaximumRowCount(Math.max(8, gyms.size()));
         trainerChoice.setRenderer(new DefaultListCellRenderer() {
             @Override public Component getListCellRendererComponent(JList<?> list, Object value, int index,
                     boolean isSelected, boolean cellHasFocus) {
@@ -227,6 +228,7 @@ public class TraineeDashboard extends JPanel implements TraineeScreen {
             trainers.stream().filter(trainer -> gym != null && gym.equals(trainer.gymName()))
                     .sorted(java.util.Comparator.comparing(UserProfile::name, String.CASE_INSENSITIVE_ORDER))
                     .forEach(trainerChoice::addItem);
+                trainerChoice.setMaximumRowCount(Math.max(8, trainerChoice.getItemCount()));
         };
         gymChoice.addActionListener(e -> updateTrainers.run());
 

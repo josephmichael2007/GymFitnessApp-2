@@ -6,6 +6,7 @@ import java.util.List;
 public interface LoginScreen {
     void setActions(LoginActions actions);
     void showTrainers(List<UserProfile> trainers);
+    void showGyms(List<String> gyms);
     void showError(Throwable error);
     void setSubmitEnabled(boolean enabled);
     void setResetEnabled(boolean enabled);
