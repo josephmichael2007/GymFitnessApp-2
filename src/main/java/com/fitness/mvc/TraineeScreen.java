@@ -2,7 +2,9 @@ package com.fitness.mvc;
 
 import com.fitness.model.AssignedExercise;
 import com.fitness.model.TraineeDashboardData;
+import com.fitness.model.UserProfile;
 import com.fitness.model.Workout;
+import java.util.List;
 
 public interface TraineeScreen {
     void setActions(TraineeActions actions);
@@ -13,4 +15,5 @@ public interface TraineeScreen {
     void clearExercise();
     void showError(Throwable error);
     void showMessage(String message, String title, int messageType);
+    void showTrainerSelection(List<UserProfile> trainers);
 }

@@ -44,8 +44,10 @@ public class TraineeDashboard extends JPanel implements TraineeScreen {
     private final CircularProgressPanel ring = new CircularProgressPanel();
     private final BarChartPanel bars = new BarChartPanel("Last 7 days (kcal)");
     private final DonutChartPanel donut = new DonutChartPanel("By category");
+    private final JButton btnChangeAssignment = Theme.button("Change gym / trainer", Theme.PRIMARY);
 
     private int goal = AppConfig.defaultDailyGoal();
+    private TraineeDashboardData currentData;
 
     public TraineeDashboard(UserProfile user, Runnable onLogout) {
         setLayout(new BorderLayout());
@@ -56,6 +58,14 @@ public class TraineeDashboard extends JPanel implements TraineeScreen {
         JPanel body = new JPanel(new BorderLayout(14, 14));
         body.setOpaque(false);
         body.setBorder(new EmptyBorder(14, 14, 14, 14));
+
+        JPanel assignmentBar = new JPanel(new FlowLayout(FlowLayout.RIGHT, 0, 0));
+        assignmentBar.setOpaque(false);
+        assignmentBar.add(btnChangeAssignment);
+        body.add(assignmentBar, BorderLayout.NORTH);
+
+        JPanel workspace = new JPanel(new BorderLayout(14, 14));
+        workspace.setOpaque(false);
 
         // Left column: assigned exercises, log form, ring
         JPanel left = new JPanel();
@@ -73,7 +83,7 @@ public class TraineeDashboard extends JPanel implements TraineeScreen {
         leftScroll.setBorder(null);
         leftScroll.getVerticalScrollBar().setUnitIncrement(14);
         leftScroll.setPreferredSize(new Dimension(360, 0));
-        body.add(leftScroll, BorderLayout.WEST);
+        workspace.add(leftScroll, BorderLayout.WEST);
 
         // Right column: charts + table
         JPanel charts = new JPanel(new GridLayout(1, 2, 14, 0));
@@ -99,7 +109,8 @@ public class TraineeDashboard extends JPanel implements TraineeScreen {
         right.setOpaque(false);
         right.add(charts, BorderLayout.NORTH);
         right.add(tableCard, BorderLayout.CENTER);
-        body.add(right, BorderLayout.CENTER);
+        workspace.add(right, BorderLayout.CENTER);
+        body.add(workspace, BorderLayout.CENTER);
         add(body, BorderLayout.CENTER);
 
         btnAdd.addActionListener(e -> {
@@ -110,6 +121,9 @@ public class TraineeDashboard extends JPanel implements TraineeScreen {
         btnDelete.addActionListener(e -> { if (actions != null) actions.deleteWorkout(table.getSelectedRow()); });
         btnLogAssigned.addActionListener(e -> {
             if (actions != null) actions.logAssignedExercise(assignedTable.getSelectedRow());
+        });
+        btnChangeAssignment.addActionListener(e -> {
+            if (actions != null) actions.loadTrainersForSelection();
         });
     }
 
@@ -150,6 +164,7 @@ public class TraineeDashboard extends JPanel implements TraineeScreen {
     }
 
     @Override public void render(TraineeDashboardData view) {
+        currentData = view;
         List<Workout> workouts = view.workouts();
         List<AssignedExercise> assigned = view.assigned();
         goal = view.profile().dailyGoal() != null ? view.profile().dailyGoal() : AppConfig.defaultDailyGoal();
@@ -184,5 +199,60 @@ public class TraineeDashboard extends JPanel implements TraineeScreen {
     @Override public void showError(Throwable error) { Theme.error(this, error); }
     @Override public void showMessage(String message, String title, int messageType) {
         JOptionPane.showMessageDialog(this, message, title, messageType);
+    }
+
+    @Override public void showTrainerSelection(List<UserProfile> trainers) {
+        if (currentData == null) return;
+        List<String> gyms = trainers.stream().map(UserProfile::gymName)
+                .filter(name -> name != null && !name.isBlank()).distinct()
+                .sorted(String.CASE_INSENSITIVE_ORDER).toList();
+        if (gyms.isEmpty()) {
+            showMessage("No trainers are available yet.", "Change gym / trainer", JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+
+        JComboBox<String> gymChoice = new JComboBox<>(gyms.toArray(String[]::new));
+        JComboBox<UserProfile> trainerChoice = new JComboBox<>();
+        trainerChoice.setRenderer(new DefaultListCellRenderer() {
+            @Override public Component getListCellRendererComponent(JList<?> list, Object value, int index,
+                    boolean isSelected, boolean cellHasFocus) {
+                super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
+                if (value instanceof UserProfile trainer) setText(trainer.name() + "  -  " + trainer.email());
+                return this;
+            }
+        });
+        Runnable updateTrainers = () -> {
+            String gym = (String) gymChoice.getSelectedItem();
+            trainerChoice.removeAllItems();
+            trainers.stream().filter(trainer -> gym != null && gym.equals(trainer.gymName()))
+                    .sorted(java.util.Comparator.comparing(UserProfile::name, String.CASE_INSENSITIVE_ORDER))
+                    .forEach(trainerChoice::addItem);
+        };
+        gymChoice.addActionListener(e -> updateTrainers.run());
+
+        String currentGym = currentData.profile().gymName();
+        if (currentGym == null && currentData.profile().trainerUid() != null) {
+            currentGym = trainers.stream().filter(t -> t.uid().equals(currentData.profile().trainerUid()))
+                    .map(UserProfile::gymName).findFirst().orElse(null);
+        }
+        if (currentGym != null) gymChoice.setSelectedItem(currentGym);
+        updateTrainers.run();
+        for (int i = 0; i < trainerChoice.getItemCount(); i++) {
+            if (trainerChoice.getItemAt(i).uid().equals(currentData.profile().trainerUid())) {
+                trainerChoice.setSelectedIndex(i);
+                break;
+            }
+        }
+
+        JPanel choices = new JPanel(new GridLayout(2, 2, 8, 8));
+        choices.add(new JLabel("Gym"));
+        choices.add(gymChoice);
+        choices.add(new JLabel("Trainer"));
+        choices.add(trainerChoice);
+        int result = JOptionPane.showConfirmDialog(this, choices, "Change gym / trainer",
+                JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+        if (result == JOptionPane.OK_OPTION && trainerChoice.getSelectedItem() instanceof UserProfile trainer) {
+            actions.updateAssignment((String) gymChoice.getSelectedItem(), trainer.uid());
+        }
     }
 }

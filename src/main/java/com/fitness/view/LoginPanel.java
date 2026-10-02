@@ -26,9 +26,10 @@ public class LoginPanel extends JPanel implements LoginScreen {
     private final JTextField txtEmail = new JTextField();
     private final JPasswordField txtPass = new JPasswordField();
     private final JPasswordField txtCode = new JPasswordField();
+    private final JComboBox<String> cbGym = new JComboBox<>();
     private final JComboBox<Object> cbTrainer = new JComboBox<>();
 
-    private final JPanel nameBlock, codeBlock, trainerBlock;
+    private final JPanel nameBlock, codeBlock, gymBlock, trainerBlock;
     private final JLabel lblCodeCaption = new JLabel("Invite code");
     private final JButton btnSubmit = Theme.button("Log in", Theme.PRIMARY);
     private final JButton btnToggle = new JButton("New here? Create an account");
@@ -39,6 +40,8 @@ public class LoginPanel extends JPanel implements LoginScreen {
     private String portal = "Trainee"; // Trainee | Trainer | Admin
     private boolean registerMode = false;
     private boolean trainersLoading = false;
+    private boolean trainersLoaded = false;
+    private List<UserProfile> trainerOptions = List.of();
     private static final String LOADING = "Loading trainers\u2026";
     private static final String NONE_YET = "No trainers registered yet";
 
@@ -80,6 +83,7 @@ public class LoginPanel extends JPanel implements LoginScreen {
 
         nameBlock = block("Name", txtName);
         codeBlock = block(lblCodeCaption, txtCode);
+        gymBlock = block("Your gym", cbGym);
         trainerBlock = block("Your trainer", cbTrainer);
 
         form.add(brand);
@@ -89,6 +93,7 @@ public class LoginPanel extends JPanel implements LoginScreen {
         form.add(nameBlock);
         form.add(block("Email", txtEmail));
         form.add(block("Password", txtPass));
+        form.add(gymBlock);
         form.add(trainerBlock);
         form.add(codeBlock);
         form.add(Box.createVerticalStrut(8));
@@ -117,6 +122,7 @@ public class LoginPanel extends JPanel implements LoginScreen {
         add(card);
 
         btnToggle.addActionListener(e -> { registerMode = !registerMode; updateVisibility(); });
+        cbGym.addActionListener(e -> refreshTrainerChoices());
         btnForgot.addActionListener(e -> {
             if (actions != null) actions.sendPasswordReset(txtEmail.getText().trim());
         });
@@ -158,6 +164,7 @@ public class LoginPanel extends JPanel implements LoginScreen {
 
         nameBlock.setVisible(registerMode);
         trainerBlock.setVisible(isTraineeReg);
+        gymBlock.setVisible(isTraineeReg);
         codeBlock.setVisible(isStaffReg);
         lblCodeCaption.setText("Admin".equals(portal) ? "Admin invite code" : "Gym code");
 
@@ -174,8 +181,9 @@ public class LoginPanel extends JPanel implements LoginScreen {
     }
 
     private void loadTrainersIfNeeded() {
-        if (trainersLoading || actions == null) return;
+        if (trainersLoading || trainersLoaded || actions == null) return;
         trainersLoading = true;
+        cbGym.removeAllItems();
         cbTrainer.removeAllItems();
         cbTrainer.addItem(LOADING);
         actions.loadTrainersForView();
@@ -184,7 +192,7 @@ public class LoginPanel extends JPanel implements LoginScreen {
                     boolean isSelected, boolean cellHasFocus) {
                 super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
                 if (value instanceof UserProfile p) {
-                    setText(p.name() + (p.gymName() != null && !p.gymName().isBlank() ? "  \u2014  " + p.gymName() : ""));
+                    setText(p.name() + "  \u2014  " + p.email());
                 }
                 return this;
             }
@@ -201,9 +209,14 @@ public class LoginPanel extends JPanel implements LoginScreen {
 
     @Override public void showTrainers(List<UserProfile> trainers) {
         trainersLoading = false;
+        trainersLoaded = true;
+        trainerOptions = List.copyOf(trainers);
+        cbGym.removeAllItems();
         cbTrainer.removeAllItems();
-        if (trainers.isEmpty()) cbTrainer.addItem(NONE_YET);
-        else for (UserProfile trainer : trainers) cbTrainer.addItem(trainer);
+        trainers.stream().map(UserProfile::gymName).filter(name -> name != null && !name.isBlank())
+            .distinct().sorted(String.CASE_INSENSITIVE_ORDER).forEach(cbGym::addItem);
+        if (cbGym.getItemCount() == 0) cbTrainer.addItem(NONE_YET);
+        else refreshTrainerChoices();
     }
 
     @Override public void showError(Throwable error) {
@@ -224,6 +237,19 @@ public class LoginPanel extends JPanel implements LoginScreen {
         UserProfile trainer = selection instanceof UserProfile profile ? profile : null;
         if (actions != null) actions.submit(new LoginRequest(txtName.getText().trim(), txtEmail.getText().trim(),
                 new String(txtPass.getPassword()), portal, new String(txtCode.getPassword()).trim(), registerMode,
-                trainer));
+                (String) cbGym.getSelectedItem(), trainer));
+    }
+
+    private void refreshTrainerChoices() {
+        String gym = (String) cbGym.getSelectedItem();
+        cbTrainer.removeAllItems();
+        if (gym == null) {
+            cbTrainer.addItem(trainersLoaded ? NONE_YET : LOADING);
+            return;
+        }
+        trainerOptions.stream().filter(trainer -> gym.equals(trainer.gymName()))
+                .sorted(java.util.Comparator.comparing(UserProfile::name, String.CASE_INSENSITIVE_ORDER))
+                .forEach(cbTrainer::addItem);
+        if (cbTrainer.getItemCount() == 0) cbTrainer.addItem(NONE_YET);
     }
 }

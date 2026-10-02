@@ -120,9 +120,10 @@ public final class FirebaseService {
      * @param inviteCode for Trainer: a gym code created by an admin; for Admin: the bootstrap code
      *                   in config.properties; ignored for Trainee
      * @param trainerUid for Trainee: the uid of the trainer they picked; ignored otherwise
+    * @param selectedGymName for Trainee: the gym the trainee selected; ignored otherwise
      */
     public static UserProfile register(String name, String email, String password, String role,
-                                        String inviteCode, String trainerUid) throws Exception {
+                                    String inviteCode, String selectedGymName, String trainerUid) throws Exception {
         if (password.length() < 6) throw new IllegalArgumentException("Password must be at least 6 characters.");
 
         String gymName = null;
@@ -142,6 +143,9 @@ public final class FirebaseService {
             if (!t.exists() || !"Trainer".equals(t.getString("role"))) {
                 throw new IllegalArgumentException("Selected trainer could not be found. Please pick again.");
             }
+            if (selectedGymName == null || !selectedGymName.equals(t.getString("gymName"))) {
+                throw new IllegalArgumentException("Please select a trainer from your chosen gym.");
+            }
         }
 
         UserRecord user = FirebaseAuth.getInstance().createUser(
@@ -153,7 +157,10 @@ public final class FirebaseService {
         profile.put("role", role);
         profile.put("createdAt", System.currentTimeMillis());
         if ("Trainer".equals(role)) profile.put("gymName", gymName);
-        if ("Trainee".equals(role)) profile.put("trainerUid", trainerUid);
+        if ("Trainee".equals(role)) {
+            profile.put("trainerUid", trainerUid);
+            profile.put("gymName", selectedGymName);
+        }
         if ("Admin".equals(role)) {
             DocumentReference adminRef = db.collection("system").document("admin");
             DocumentReference profileRef = db.collection("users").document(user.getUid());
@@ -181,7 +188,8 @@ public final class FirebaseService {
             db.collection("users").document(user.getUid()).set(profile).get();
         }
         return new UserProfile(user.getUid(), email, name, role, null,
-                "Trainee".equals(role) ? trainerUid : null, gymName);
+            "Trainee".equals(role) ? trainerUid : null,
+            "Trainee".equals(role) ? selectedGymName : gymName);
     }
 
     public static UserProfile getProfile(String uid) throws Exception {
@@ -367,6 +375,24 @@ public final class FirebaseService {
     /** All trainers, for a trainee's "pick your trainer" dropdown at signup. */
     public static List<UserProfile> getTrainersForSelection() throws Exception {
         return getUsersByRole("Trainer");
+    }
+
+    public static void updateTraineeAssignment(String traineeUid, String gymName, String trainerUid) throws Exception {
+        DocumentReference traineeRef = db.collection("users").document(traineeUid);
+        DocumentReference trainerRef = db.collection("users").document(trainerUid);
+        db.runTransaction(transaction -> {
+            DocumentSnapshot trainee = transaction.get(traineeRef).get();
+            DocumentSnapshot trainer = transaction.get(trainerRef).get();
+            if (!trainee.exists() || !"Trainee".equals(trainee.getString("role"))) {
+                throw new IllegalArgumentException("Trainee account could not be found.");
+            }
+            if (!trainer.exists() || !"Trainer".equals(trainer.getString("role"))
+                    || gymName == null || !gymName.equals(trainer.getString("gymName"))) {
+                throw new IllegalArgumentException("Please select a trainer from your chosen gym.");
+            }
+            transaction.update(traineeRef, Map.of("gymName", gymName, "trainerUid", trainerUid));
+            return null;
+        }).get();
     }
 
     /** Only the trainees that belong to this trainer - the data-isolation boundary. */

@@ -108,4 +108,21 @@ public class TraineeController implements TraineeActions {
         view.showMessage("Filled the log form with \"" + exercise.exerciseName()
                 + "\". Set the calories burned and click Add workout.", "Ready to log", JOptionPane.INFORMATION_MESSAGE);
     }
+
+    @Override
+    public void loadTrainersForSelection() {
+        Async.run(FirebaseService::getTrainersForSelection, view::showTrainerSelection, view::showError);
+    }
+
+    @Override
+    public void updateAssignment(String gymName, String trainerUid) {
+        Async.run(() -> {
+            FirebaseService.updateTraineeAssignment(uid, gymName, trainerUid);
+            return load(uid);
+        }, result -> {
+            currentView = result;
+            view.render(result);
+            view.showMessage("Your gym and trainer have been updated.", "Profile updated", JOptionPane.INFORMATION_MESSAGE);
+        }, view::showError);
+    }
 }

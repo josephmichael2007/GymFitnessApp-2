@@ -35,8 +35,8 @@ public class AuthController implements LoginActions {
     }
 
     public UserProfile register(String name, String email, String password, String role, String inviteCode,
-                                 String trainerUid) throws Exception {
-        return FirebaseService.register(name, email, password, role, inviteCode, trainerUid);
+                                 String gymName, String trainerUid) throws Exception {
+        return FirebaseService.register(name, email, password, role, inviteCode, gymName, trainerUid);
     }
 
     /** For the Trainee registration screen's "pick your trainer" dropdown. */
@@ -57,18 +57,21 @@ public class AuthController implements LoginActions {
             return;
         }
         String trainerUid = null;
+        String gymName = null;
         if (request.registerMode() && "Trainee".equals(request.portal())) {
-            if (request.trainer() == null) {
-                view.showMessage("Please select your trainer.", "Missing info", JOptionPane.WARNING_MESSAGE);
+            if (request.gymName() == null || request.gymName().isBlank() || request.trainer() == null) {
+                view.showMessage("Please select your gym and trainer.", "Missing info", JOptionPane.WARNING_MESSAGE);
                 return;
             }
+            gymName = request.gymName();
             trainerUid = request.trainer().uid();
         }
+        String selectedGymName = gymName;
         String selectedTrainerUid = trainerUid;
         view.setSubmitEnabled(false);
         Async.run(() -> request.registerMode()
                         ? register(request.name(), request.email(), request.password(), request.portal(),
-                                request.code(), selectedTrainerUid)
+                            request.code(), selectedGymName, selectedTrainerUid)
                         : login(request.email(), request.password(), request.portal()),
                 user -> {
                     view.setSubmitEnabled(true);
